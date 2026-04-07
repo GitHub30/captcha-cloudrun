@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Captcha Decoder</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #eef4ff 0%, #f9fbff 100%);
+        color: #172033;
+      }
+
+      .container {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 32px 16px 56px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(33, 66, 131, 0.12);
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+      }
+
+      p {
+        line-height: 1.6;
+      }
+
+      .uploader {
+        border: 2px dashed #a9b9de;
+        border-radius: 16px;
+        padding: 20px;
+        background: #f8fbff;
+      }
+
+      .file-input {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #cad5ef;
+        background: #fff;
+      }
+
+      .preview {
+        margin-top: 16px;
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        align-items: start;
+      }
+
+      .preview-box,
+      .result-box {
+        border: 1px solid #e1e8f7;
+        border-radius: 14px;
+        padding: 16px;
+        background: #fff;
+      }
+
+      .preview-box img {
+        width: 100%;
+        max-height: 180px;
+        object-fit: contain;
+        border-radius: 10px;
+        background: #f4f7ff;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: #2563eb;
+        color: #fff;
+      }
+
+      .secondary {
+        background: #e8eefc;
+        color: #1e3a8a;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .status {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: #eef4ff;
+        color: #214283;
+      }
+
+      .result {
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        margin: 8px 0 0;
+        color: #0f172a;
+        word-break: break-all;
+      }
+
+      .muted {
+        color: #5b6780;
+      }
+
+      code {
+        background: #f1f5ff;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useEffect, useMemo, useRef, useState } = React;
+
+      function App() {
+        const [model, setModel] = useState(null);
+        const [modelStatus, setModelStatus] = useState("モデルを読み込み中です...");
+        const [previewUrl, setPreviewUrl] = useState("");
+        const [result, setResult] = useState("");
+        const [busy, setBusy] = useState(false);
+        const [error, setError] = useState("");
+        const imageRef = useRef(null);
+
+        useEffect(() => {
+          let cancelled = false;
+
+          async function loadModel() {
+            try {
+              if (tf.getBackend() !== "webgl") {
+                try {
+                  await tf.setBackend("webgl");
+                } catch {
+                  await tf.setBackend("cpu");
+                }
+              }
+              await tf.ready();
+              const loadedModel = await tf.loadLayersModel("./web_model/model.json?v=20260407-2");
+              if (!cancelled) {
+                setModel(loadedModel);
+                setModelStatus("モデルの読み込みが完了しました。");
+              }
+            } catch (err) {
+              if (!cancelled) {
+                console.error(err);
+                setModelStatus("モデルの読み込みに失敗しました。");
+                setError(
+                  `モデル読込エラー: ${err?.message || err}. 静的サーバー経由で開いていることも確認してください。`
+                );
+              }
+            }
+          }
+
+          loadModel();
+          return () => {
+            cancelled = true;
+          };
+        }, []);
+
+        useEffect(() => {
+          return () => {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+            }
+          };
+        }, [previewUrl]);
+
+        const canPredict = useMemo(() => Boolean(model && previewUrl && !busy), [model, previewUrl, busy]);
+
+        function handleFileChange(event) {
+          const file = event.target.files?.[0];
+          setResult("");
+          setError("");
+
+          if (!file) {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+            }
+            setPreviewUrl("");
+            return;
+          }
+
+          if (!file.type.startsWith("image/")) {
+            setError("画像ファイルを選択してください。");
+            return;
+          }
+
+          if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPreviewUrl(URL.createObjectURL(file));
+        }
+
+        function decodeCaptcha(predictionTensor) {
+          const blankIndex = predictionTensor.shape[2] - 1;
+          const bestPath = predictionTensor.argMax(-1).dataSync();
+          const digits = [];
+          let previous = blankIndex;
+
+          for (const index of bestPath) {
+            if (index !== blankIndex && index !== previous) {
+              digits.push(String(index));
+            }
+            previous = index;
+          }
+
+          return digits.join("");
+        }
+
+        async function runInference() {
+          if (!model || !imageRef.current) return;
+
+          setBusy(true);
+          setError("");
+          setResult("");
+
+          try {
+            const code = tf.tidy(() => {
+              const tensor = tf.browser
+                .fromPixels(imageRef.current)
+                .resizeBilinear([60, 300])
+                .toFloat()
+                .div(255)
+                .expandDims(0);
+
+              const prediction = model.predict(tensor);
+              return decodeCaptcha(prediction);
+            });
+
+            setResult(code || "(空文字)");
+          } catch (err) {
+            console.error(err);
+            setError("推論に失敗しました。ブラウザのコンソールも確認してください。");
+          } finally {
+            setBusy(false);
+          }
+        }
+
+        function resetAll() {
+          if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+          }
+          setPreviewUrl("");
+          setResult("");
+          setError("");
+        }
+
+        return (
+          <div className="container">
+            <div className="card">
+              <h1>Captcha Decoder</h1>
+              <p className="muted">
+                <code>xserver_captcha.keras</code> から変換した TensorFlow.js モデルを読み込み、
+                <strong>ブラウザ内だけ</strong> で画像推論して code を表示します。
+              </p>
+
+              <div className="uploader">
+                <input className="file-input" type="file" accept="image/*" onChange={handleFileChange} />
+                <div className="status">{modelStatus}</div>
+
+                {error && (
+                  <div className="status" style={{ background: "#fff1f2", color: "#be123c" }}>
+                    {error}
+                  </div>
+                )}
+
+                <div className="actions">
+                  <button className="primary" onClick={runInference} disabled={!canPredict}>
+                    {busy ? "推論中..." : "code を表示"}
+                  </button>
+                  <button className="secondary" onClick={resetAll} disabled={busy && !previewUrl}>
+                    クリア
+                  </button>
+                </div>
+
+                <div className="preview">
+                  <div className="preview-box">
+                    <strong>画像プレビュー</strong>
+                    <div style={{ marginTop: 12 }}>
+                      {previewUrl ? (
+                        <img ref={imageRef} src={previewUrl} alt="preview" />
+                      ) : (
+                        <p className="muted">画像を選択するとここに表示されます。</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="result-box">
+                    <strong>推論結果</strong>
+                    <p className="muted">CTC greedy decode で code を生成します。</p>
+                    <div className="result">{result || "----"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
