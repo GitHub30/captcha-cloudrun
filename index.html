@@ -62,6 +62,29 @@
         background: #fff;
       }
 
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
+      }
+
+      .language-select {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #214283;
+      }
+
+      .language-select select {
+        border: 1px solid #cad5ef;
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: #fff;
+        color: #172033;
+      }
+
       .sample-list {
         display: flex;
         flex-wrap: wrap;
@@ -180,15 +203,171 @@
     <script type="text/babel">
       const { useEffect, useMemo, useRef, useState } = React;
       const SAMPLE_IMAGES = ["captcha1.png", "captcha2.jpg", "captcha3.jpg", "captcha4.jpg"];
+      const LANGUAGE_OPTIONS = [
+        { value: "en", label: "English" },
+        { value: "ja", label: "日本語" },
+        { value: "zh-CN", label: "简体中文" },
+        { value: "zh-TW", label: "繁體中文" },
+        { value: "ko", label: "한국어" },
+        { value: "vi", label: "Tiếng Việt" },
+      ];
+
+      function detectBrowserLanguage() {
+        const languages = navigator.languages?.length ? navigator.languages : [navigator.language || "ja"];
+
+        for (const lang of languages) {
+          const code = String(lang).toLowerCase();
+          if (code.startsWith("ja")) return "ja";
+          if (code.startsWith("en")) return "en";
+          if (code.startsWith("zh-tw") || code.startsWith("zh-hk") || code.startsWith("zh-mo")) return "zh-TW";
+          if (code.startsWith("zh")) return "zh-CN";
+          if (code.startsWith("ko")) return "ko";
+          if (code.startsWith("vi")) return "vi";
+        }
+
+        return "ja";
+      }
+
+      const TEXT = {
+        en: {
+          appTitle: "Captcha Decoder",
+          descriptionBefore: "converted into a TensorFlow.js model and",
+          browserOnly: "runs entirely in the browser",
+          descriptionAfter: "to display the code.",
+          languageLabel: "Language",
+          sampleImages: "Sample Images",
+          predictButton: "Show code",
+          predicting: "Inferring...",
+          clear: "Clear",
+          previewTitle: "Image Preview",
+          previewPlaceholder: "Select an image to preview it here.",
+          resultTitle: "Inference Result",
+          resultHint: "Generate the code using CTC greedy decode.",
+          resultPlaceholder: "----",
+          modelLoading: "Loading model...",
+          modelLoaded: "Model loaded successfully.",
+          invalidImage: "Please select an image file.",
+          inferenceFailed: "Inference failed. Please also check the browser console.",
+          modelLoadFailed: (detail) => `Model load error: ${detail}. Also confirm the page is opened through a static server.`,
+        },
+        ja: {
+          appTitle: "Captcha Decoder",
+          descriptionBefore: "から変換した TensorFlow.js モデルを読み込み、",
+          browserOnly: "ブラウザ内だけ",
+          descriptionAfter: "で画像推論して code を表示します。",
+          languageLabel: "言語",
+          sampleImages: "サンプル画像",
+          predictButton: "code を表示",
+          predicting: "推論中...",
+          clear: "クリア",
+          previewTitle: "画像プレビュー",
+          previewPlaceholder: "画像を選択するとここに表示されます。",
+          resultTitle: "推論結果",
+          resultHint: "CTC greedy decode で code を生成します。",
+          resultPlaceholder: "----",
+          modelLoading: "モデルを読み込み中です...",
+          modelLoaded: "モデルの読み込みが完了しました。",
+          invalidImage: "画像ファイルを選択してください。",
+          inferenceFailed: "推論に失敗しました。ブラウザのコンソールも確認してください。",
+          modelLoadFailed: (detail) => `モデル読込エラー: ${detail}. 静的サーバー経由で開いていることも確認してください。`,
+        },
+        "zh-CN": {
+          appTitle: "验证码识别器",
+          descriptionBefore: "转换得到的 TensorFlow.js 模型，并",
+          browserOnly: "仅在浏览器内",
+          descriptionAfter: "进行图像推理并显示 code。",
+          languageLabel: "语言",
+          sampleImages: "示例图片",
+          predictButton: "显示 code",
+          predicting: "推理中...",
+          clear: "清除",
+          previewTitle: "图片预览",
+          previewPlaceholder: "选择图片后会显示在这里。",
+          resultTitle: "推理结果",
+          resultHint: "使用 CTC greedy decode 生成 code。",
+          resultPlaceholder: "----",
+          modelLoading: "正在加载模型...",
+          modelLoaded: "模型加载完成。",
+          invalidImage: "请选择图片文件。",
+          inferenceFailed: "推理失败。请同时检查浏览器控制台。",
+          modelLoadFailed: (detail) => `模型加载错误：${detail}。也请确认页面是通过静态服务器打开的。`,
+        },
+        "zh-TW": {
+          appTitle: "驗證碼辨識器",
+          descriptionBefore: "轉換得到的 TensorFlow.js 模型，並",
+          browserOnly: "僅在瀏覽器內",
+          descriptionAfter: "進行影像推論並顯示 code。",
+          languageLabel: "語言",
+          sampleImages: "範例圖片",
+          predictButton: "顯示 code",
+          predicting: "推論中...",
+          clear: "清除",
+          previewTitle: "圖片預覽",
+          previewPlaceholder: "選擇圖片後會顯示在這裡。",
+          resultTitle: "推論結果",
+          resultHint: "使用 CTC greedy decode 產生 code。",
+          resultPlaceholder: "----",
+          modelLoading: "模型載入中...",
+          modelLoaded: "模型載入完成。",
+          invalidImage: "請選擇圖片檔案。",
+          inferenceFailed: "推論失敗。也請檢查瀏覽器主控台。",
+          modelLoadFailed: (detail) => `模型載入錯誤：${detail}。也請確認頁面是透過靜態伺服器開啟的。`,
+        },
+        ko: {
+          appTitle: "캡차 디코더",
+          descriptionBefore: "에서 변환한 TensorFlow.js 모델을 불러와",
+          browserOnly: "브라우저 안에서만",
+          descriptionAfter: "추론하여 code를 표시합니다.",
+          languageLabel: "언어",
+          sampleImages: "샘플 이미지",
+          predictButton: "code 보기",
+          predicting: "추론 중...",
+          clear: "지우기",
+          previewTitle: "이미지 미리보기",
+          previewPlaceholder: "이미지를 선택하면 여기에 표시됩니다.",
+          resultTitle: "추론 결과",
+          resultHint: "CTC greedy decode로 code를 생성합니다.",
+          resultPlaceholder: "----",
+          modelLoading: "모델을 불러오는 중입니다...",
+          modelLoaded: "모델 로딩이 완료되었습니다.",
+          invalidImage: "이미지 파일을 선택하세요.",
+          inferenceFailed: "추론에 실패했습니다. 브라우저 콘솔도 확인하세요.",
+          modelLoadFailed: (detail) => `모델 로드 오류: ${detail}. 정적 서버를 통해 페이지를 열었는지도 확인하세요.`,
+        },
+        vi: {
+          appTitle: "Trình giải Captcha",
+          descriptionBefore: "đã chuyển đổi sang mô hình TensorFlow.js và",
+          browserOnly: "chạy suy luận hoàn toàn trên trình duyệt",
+          descriptionAfter: "để hiển thị code.",
+          languageLabel: "Ngôn ngữ",
+          sampleImages: "Ảnh mẫu",
+          predictButton: "Hiển thị code",
+          predicting: "Đang suy luận...",
+          clear: "Xóa",
+          previewTitle: "Xem trước ảnh",
+          previewPlaceholder: "Chọn ảnh để hiển thị tại đây.",
+          resultTitle: "Kết quả suy luận",
+          resultHint: "Tạo code bằng CTC greedy decode.",
+          resultPlaceholder: "----",
+          modelLoading: "Đang tải mô hình...",
+          modelLoaded: "Đã tải mô hình xong.",
+          invalidImage: "Vui lòng chọn một tệp hình ảnh.",
+          inferenceFailed: "Suy luận thất bại. Hãy kiểm tra thêm console của trình duyệt.",
+          modelLoadFailed: (detail) => `Lỗi tải mô hình: ${detail}. Đồng thời hãy xác nhận trang được mở qua máy chủ tĩnh.`,
+        },
+      };
 
       function App() {
+        const [language, setLanguage] = useState(detectBrowserLanguage());
+        const t = TEXT[language];
         const [model, setModel] = useState(null);
-        const [modelStatus, setModelStatus] = useState("モデルを読み込み中です...");
+        const [modelStatusKey, setModelStatusKey] = useState("modelLoading");
         const [previewUrl, setPreviewUrl] = useState("");
         const [selectedSample, setSelectedSample] = useState("");
         const [result, setResult] = useState("");
         const [busy, setBusy] = useState(false);
-        const [error, setError] = useState("");
+        const [errorKey, setErrorKey] = useState("");
+        const [errorDetail, setErrorDetail] = useState("");
         const imageRef = useRef(null);
         const fileInputRef = useRef(null);
 
@@ -208,15 +387,14 @@
               const loadedModel = await tf.loadLayersModel("./web_model/model.json?v=20260407-2");
               if (!cancelled) {
                 setModel(loadedModel);
-                setModelStatus("モデルの読み込みが完了しました。");
+                setModelStatusKey("modelLoaded");
               }
             } catch (err) {
               if (!cancelled) {
                 console.error(err);
-                setModelStatus("モデルの読み込みに失敗しました。");
-                setError(
-                  `モデル読込エラー: ${err?.message || err}. 静的サーバー経由で開いていることも確認してください。`
-                );
+                setModelStatusKey("modelLoading");
+                setErrorKey("modelLoadFailed");
+                setErrorDetail(err?.message || String(err));
               }
             }
           }
@@ -228,19 +406,26 @@
         }, []);
 
         useEffect(() => {
+          document.documentElement.lang = language;
+        }, [language]);
+
+        useEffect(() => {
           return () => {
-            if (previewUrl) {
+            if (previewUrl && previewUrl.startsWith("blob:")) {
               URL.revokeObjectURL(previewUrl);
             }
           };
         }, [previewUrl]);
 
         const canPredict = useMemo(() => Boolean(model && previewUrl && !busy), [model, previewUrl, busy]);
+        const modelStatus = t[modelStatusKey] || "";
+        const errorMessage = errorKey === "modelLoadFailed" ? t.modelLoadFailed(errorDetail) : errorKey ? t[errorKey] : "";
 
         function handleFileChange(event) {
           const file = event.target.files?.[0];
           setResult("");
-          setError("");
+          setErrorKey("");
+          setErrorDetail("");
           setSelectedSample("");
 
           if (!file) {
@@ -252,7 +437,7 @@
           }
 
           if (!file.type.startsWith("image/")) {
-            setError("画像ファイルを選択してください。");
+            setErrorKey("invalidImage");
             return;
           }
 
@@ -264,7 +449,8 @@
 
         function chooseSample(sampleName) {
           setResult("");
-          setError("");
+          setErrorKey("");
+          setErrorDetail("");
           setSelectedSample(sampleName);
           if (fileInputRef.current) {
             fileInputRef.current.value = "";
@@ -301,7 +487,8 @@
           if (!model || !imageRef.current) return;
 
           setBusy(true);
-          setError("");
+          setErrorKey("");
+          setErrorDetail("");
           setResult("");
 
           try {
@@ -320,7 +507,7 @@
             setResult(code || "(空文字)");
           } catch (err) {
             console.error(err);
-            setError("推論に失敗しました。ブラウザのコンソールも確認してください。");
+            setErrorKey("inferenceFailed");
           } finally {
             setBusy(false);
           }
@@ -340,21 +527,35 @@
           setPreviewUrl("");
           setSelectedSample("");
           setResult("");
-          setError("");
+          setErrorKey("");
+          setErrorDetail("");
         }
 
         return (
           <div className="container">
             <div className="card">
-              <h1>Captcha Decoder</h1>
+              <h1>{t.appTitle}</h1>
               <p className="muted">
-                <code>xserver_captcha.keras</code> から変換した TensorFlow.js モデルを読み込み、
-                <strong>ブラウザ内だけ</strong> で画像推論して code を表示します。
+                <code>xserver_captcha.keras</code> {t.descriptionBefore}
+                <strong>{t.browserOnly}</strong> {t.descriptionAfter}
               </p>
 
               <div className="uploader">
+                <div className="toolbar">
+                  <label className="language-select">
+                    <span>{t.languageLabel}</span>
+                    <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
                 <div>
-                  <strong>サンプル画像</strong>
+                  <strong>{t.sampleImages}</strong>
                   <div className="sample-list">
                     {SAMPLE_IMAGES.map((sampleName) => (
                       <button
@@ -380,37 +581,37 @@
                 />
                 <div className="status">{modelStatus}</div>
 
-                {error && (
+                {errorMessage && (
                   <div className="status" style={{ background: "#fff1f2", color: "#be123c" }}>
-                    {error}
+                    {errorMessage}
                   </div>
                 )}
 
                 <div className="actions">
                   <button className="primary" onClick={runInference} disabled={!canPredict}>
-                    {busy ? "推論中..." : "code を表示"}
+                    {busy ? t.predicting : t.predictButton}
                   </button>
                   <button className="secondary" onClick={resetAll} disabled={busy && !previewUrl}>
-                    クリア
+                    {t.clear}
                   </button>
                 </div>
 
                 <div className="preview">
                   <div className="preview-box">
-                    <strong>画像プレビュー</strong>
+                    <strong>{t.previewTitle}</strong>
                     <div style={{ marginTop: 12 }}>
                       {previewUrl ? (
                         <img ref={imageRef} src={previewUrl} alt="preview" onLoad={handlePreviewLoad} />
                       ) : (
-                        <p className="muted">画像を選択するとここに表示されます。</p>
+                        <p className="muted">{t.previewPlaceholder}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="result-box">
-                    <strong>推論結果</strong>
-                    <p className="muted">CTC greedy decode で code を生成します。</p>
-                    <div className="result">{result || "----"}</div>
+                    <strong>{t.resultTitle}</strong>
+                    <p className="muted">{t.resultHint}</p>
+                    <div className="result">{result || t.resultPlaceholder}</div>
                   </div>
                 </div>
               </div>
